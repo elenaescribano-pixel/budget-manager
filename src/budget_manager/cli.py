@@ -6,54 +6,47 @@
 #   PYTHONPATH=src python3 -m budget_manager.cli list
 #   PYTHONPATH=src python3 -m budget_manager.cli report
 #   PYTHONPATH=src python3 -m budget_manager.cli --file data/sample_transactions.csv report
+#
+# Códigos de salida: 0 = todo bien, 1 = error (dato inválido o archivo con filas malas).
 
 import argparse
+import sys
 from datetime import date
 
 from budget_manager import services, storage
 
-parser = argparse.ArgumentParser(description="Personal budget manager")
-parser.add_argument("--file", default="data/transactions.csv", help="CSV file to use")
-commands = parser.add_subparsers(dest="command", required=True)
+# Nombres de los comandos en constantes, para no escribirlos mal en dos sitios.
+COMMAND_ADD = "add"
+COMMAND_LIST = "list"
+COMMAND_REPORT = "report"
+DEFAULT_FILE = "data/transactions.csv"
 
-add = commands.add_parser("add", help="add a transaction")
-add.add_argument("kind", help="expense or income")
-add.add_argument("category", help="food, transport, housing, leisure, health, salary, other")
-add.add_argument("amount", help="positive number, e.g. 18.50")
-add.add_argument("--date", default=date.today().isoformat(), help="YYYY-MM-DD (default: today)")
-add.add_argument("--currency", default="EUR")
 
-commands.add_parser("list", help="show all transactions")
-commands.add_parser("report", help="show totals and balance")
+def build_parser():
+    parser = argparse.ArgumentParser(description="Personal budget manager")
+    parser.add_argument("--file", default=DEFAULT_FILE, help="CSV file to use")
+    commands = parser.add_subparsers(dest="command", required=True)
 
-args = parser.parse_args()
+    add = commands.add_parser(COMMAND_ADD, help="add a transaction")
+    add.add_argument("kind", help="expense or income")
+    add.add_argument("category", help="food, transport, housing, leisure, health, salary, other")
+    add.add_argument("amount", help="positive number, e.g. 18.50")
+    add.add_argument("--date", default=date.today().isoformat(), help="YYYY-MM-DD (default: today)")
+    add.add_argument("--currency", default="EUR")
 
-transactions, errors = storage.load_transactions(args.file)
+    commands.add_parser(COMMAND_LIST, help="show all transactions")
+    commands.add_parser(COMMAND_REPORT, help="show totals and balance")
+    return parser
 
-# Avisar de las filas que no se han podido cargar.
-for error in errors:
-    print(f"Skipped {error}")
 
-if args.command == "add":
-    if errors:
-        # Si guardáramos ahora, las filas malas desaparecerían del archivo sin avisar.
-        print("Cannot add: fix the rows above in the file first.")
-    else:
-        try:
-            new = services.add_transaction(transactions, args.date, args.kind,
-                                           args.category, args.amount, args.currency)
-            storage.save_transactions(args.file, transactions)
-            print(f"Added {new['id']}: {new['kind']} {new['category']} {new['amount']:.2f} {new['currency']}")
-        except ValueError as error:
-            print(f"Error: {error}")
-
-elif args.command == "list":
+def show_list(transactions):
     if not transactions:
         print("No transactions yet.")
     for t in transactions:
-        print(f"{t['id']}  {t['date']}  {t['kind']:<8} {t['category']:<10} {t['amount']:>9.2f} {t['currency']}")
+        print(t)  # Usa Transaction.__str__
 
-elif args.command == "report":
+
+def show_report(transactions):
     print(f"Income:   {services.total_income(transactions):>9.2f} EUR")
     print(f"Expenses: {services.total_expenses(transactions):>9.2f} EUR")
     print(f"Balance:  {services.balance(transactions):>9.2f} EUR")
@@ -62,3 +55,37 @@ elif args.command == "report":
         print("Expenses by category:")
         for category, amount in by_category.items():
             print(f"  {category:<10} {amount:>9.2f}")
+
+
+def main():
+    args = build_parser().parse_args()
+
+    transactions, errors = storage.load_transactions(args.file)
+
+    # Avisar de las filas que no se han podido cargar (por el canal de errores).
+    for error in errors:
+        print(f"Skipped {error}", file=sys.stderr)
+
+    if args.command == COMMAND_ADD:
+        if errors:
+            # Si guardáramos ahora, las filas malas desaparecerían del archivo sin avisar.
+            print("Cannot add: fix the rows above in the file first.", file=sys.stderr)
+            sys.exit(1)
+        try:
+            new = services.add_transaction(transactions, args.date, args.kind,
+                                           args.category, args.amount, args.currency)
+        except ValueError as error:
+            print(f"Error: {error}", file=sys.stderr)
+            sys.exit(1)
+        storage.save_transactions(args.file, transactions)
+        print(f"Added {new}")
+
+    elif args.command == COMMAND_LIST:
+        show_list(transactions)
+
+    elif args.command == COMMAND_REPORT:
+        show_report(transactions)
+
+
+if __name__ == "__main__":
+    main()

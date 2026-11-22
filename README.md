@@ -23,6 +23,8 @@ On Windows (PowerShell) set the path first: `$env:PYTHONPATH="src"`, then `pytho
 Data is saved in `data/transactions.csv` (created automatically).
 Use `--file` to choose another file, e.g. `--file data/sample_transactions.csv`.
 
+Exit codes: `0` = success, `1` = invalid input or the file has invalid rows (errors are printed to stderr).
+
 Allowed values:
 - kind: `expense`, `income`
 - category: `food`, `transport`, `housing`, `leisure`, `health`, `salary`, `other`
@@ -34,9 +36,9 @@ Allowed values:
 
 ```
 $ PYTHONPATH=src python3 -m budget_manager.cli add income salary 1200 --date 2026-09-01
-Added T001: income salary 1200.00 EUR
+Added T001  2026-09-01  income   salary       1200.00 EUR
 $ PYTHONPATH=src python3 -m budget_manager.cli add expense food 18.50 --date 2026-09-04
-Added T002: expense food 18.50 EUR
+Added T002  2026-09-04  expense  food           18.50 EUR
 $ PYTHONPATH=src python3 -m budget_manager.cli add expense food -5
 Error: amount must be > 0 (got -5.0)
 $ PYTHONPATH=src python3 -m budget_manager.cli report
@@ -66,11 +68,11 @@ Balance:     731.50 EUR
 ## Test
 
 ```bash
-python3 tests/test_budget.py
+PYTHONPATH=src python3 tests/test_budget.py
 ```
 
-Expected: `9 tests passed` (1 normal case, boundary cases for amount/kind/category,
-and save/load round-trip). The tests also work with `pytest` if it is installed.
+Expected: `All 9 tests passed` (1 normal case, boundary cases for amount/kind/category,
+and save/load round-trip). If an assertion fails, Python shows an `AssertionError`.
 
 ## Known limitations
 - Only one currency (EUR). Mixing currencies would make the balance wrong.
